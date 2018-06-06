@@ -8,7 +8,7 @@ import sys
 import time
 from collections import namedtuple
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Iterable
 
 import requests
 
@@ -70,19 +70,16 @@ class PluginInfo:
     def __init__(
         self,
         name: str,
-        comment: str,
         path_in_home: Path,
-        install_func: Optional[Callable[["PluginInfo", str], bool]],
     ) -> None:
         self.name = name
-        self.comment = comment
         self.path = Path.home() / path_in_home
-        self.install_func = install_func
 
-    def install(self) -> bool:
-        if self.install_func is None:
-            return True
-        return self.install_func()
+    def validate(self) -> bool:
+        raise NotImplementedError()
+
+    def install(self, theme: str) -> bool:
+        raise NotImplementedError()
 
 
 class DownloadedPluginInfo(PluginInfo):
@@ -92,12 +89,13 @@ class DownloadedPluginInfo(PluginInfo):
     def __init__(
         self,
         name: str,
-        comment: str,
         path_in_home: Path,
+        comment: str,
         theme_url: str,
         post_process_func: Optional[Callable[["PluginInfo", str], bool]] = None,
     ) -> None:
-        super().__init__(name, comment, path_in_home, None)
+        super().__init__(name, path_in_home)
+        self.comment = comment
         self.theme_url = theme_url
         self.post_process_func = post_process_func
 
@@ -195,7 +193,80 @@ class DownloadedPluginInfo(PluginInfo):
         if self.post_process_func is not None and not self.post_process_func(self):
             return False
 
-        print(f"{self.name} updated successfully")
+        return True
+
+
+class ShellPluginInfo(PluginInfo):
+
+    def __init__(self):
+        super().__init__('shell', Path('.config/base16-shell'))
+
+    @property
+    def available_themes(self) -> Iterable[str]:
+        pattern = re.compile('base16-(.*)\.sh$')
+        for script in (self.path / 'scripts').glob('*.sh'):
+            m = pattern.match(script.name)
+            if m is None:
+                continue
+            yield m.group(1)
+
+    def validate(self) -> bool:
+        if not self.path.is_dir():
+            print(
+                "You don't appear to be using base16_shell. Clone "
+                "https://github.com/chriskempson/base16-shell into "
+                "~/.config/base16-shell and follow the rest of the "
+                "installation instructions on the page, and then re-"
+                "run `base16 doctor`.",
+                file=sys.stderr,
+            )
+            return False
+
+        if 'BASE16_THEME' not in os.environ:
+            print(
+                "You don't appear to be using base16_shell. Ensure "
+                "that you've followed the shell setup steps at "
+                "https://github.com/chriskempson/base16-shell and then "
+                "re-run `base16 doctor`.",
+                file=sys.stderr,
+            )
+            return False
+
+        try:
+            os.stat(Path.home() / '.base16_theme')
+        except FileNotFoundError:
+            print(
+                "~/.base16_theme currently isn't linked to an installed theme. "
+                "Reinstall the theme with `base16 install <theme>`.",
+                file=sys.stderr,
+            )
+            return False
+
+        return True
+
+    def install(self, theme: str) -> bool:
+        theme_path = self.path / f'scripts/base16-{theme}.sh'
+        if not theme_path.is_file():
+            print(
+                f"{theme_path} isn't a valid theme file. Installed themes: "
+                "{}".format(', '.join(list(self.available_themes))),
+                file=sys.stderr,
+            )
+            return False
+
+        destination_path = Path.home() / '.base16_theme'
+        if destination_path.is_file() or destination_path.is_symlink():
+            destination_path.unlink()
+
+        destination_path.symlink_to(theme_path)
+
+        with (Path.home() / '.vimrc_background').open('w') as f:
+            lines = [
+                f"if !exists('g:colors_name') || g:colors_name != 'base16-{theme}'\n",
+                f"  colorscheme base16-{theme}\n",
+                "endif\n",
+            ]
+            f.write(''.join(lines))
 
         return True
 
@@ -209,23 +280,24 @@ def sync_xresources(plugin_info: DownloadedPluginInfo) -> bool:
 
 
 SUPPORTED_PLUGINS = {
+    "shell": ShellPluginInfo(),
     "xresources": DownloadedPluginInfo(
         "xresources",
-        "!",
         Path(".Xresources"),
+        "!",
         "https://raw.githubusercontent.com/chriskempson/base16-xresources/master/xresources/base16-{}.Xresources",
         post_process_func=sync_xresources,
     ),
     "dunst": DownloadedPluginInfo(
         "dunst",
-        "#",
         Path(".config/dunst/dunstrc"),
+        "#",
         "https://raw.githubusercontent.com/khamer/base16-dunst/master/themes/base16-{}.dunstrc",
     ),
     "i3": DownloadedPluginInfo(
         "i3",
-        "#",
         Path(".config/i3/config"),
+        "#",
         "https://raw.githubusercontent.com/khamer/base16-i3/master/colors/base16-{}.config",
     ),
 }
@@ -245,6 +317,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                 ", ".join(sorted(unsupported_plugins))
             )
         )
+        return 1
+
+    if 'shell' not in config.enabled:
+        print(f'Plugin "shell" must be enabled. Please update {args.config_path} accordingly.', file=sys.stderr)
         return 1
 
     for plugin, plugin_info in SUPPORTED_PLUGINS.items():
@@ -267,11 +343,8 @@ def cmd_install(args: argparse.Namespace, config: Config) -> int:
         if not config_info.install(args.theme):
             return 1
 
-    # TODO(jsvana): somehow run zsh functions in parent. maybe need to just instruct user to reopen shell
-    """
-    eval "base16_$1"
-    eval "_base16 /home/jsvana/.config/base16-shell/scripts/base16-$1.sh $1"
-    """
+        print(f"{plugin} installed successfully")
+
     return 0
 
 
