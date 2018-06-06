@@ -8,7 +8,7 @@ import sys
 import time
 from collections import namedtuple
 from pathlib import Path
-from typing import Any, Callable, Optional, Iterable
+from typing import Any, Callable, Iterable, Optional
 
 import requests
 
