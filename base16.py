@@ -63,6 +63,16 @@ def parse_args() -> argparse.Namespace:
     )
     install_parser.set_defaults(cmd=cmd_install)
 
+    list_parser = subparsers.add_parser(
+        "list", help="List all installed themes"
+    )
+    list_parser.set_defaults(cmd=cmd_list)
+
+    show_parser = subparsers.add_parser(
+        "show", help="Show currently installed theme"
+    )
+    show_parser.set_defaults(cmd=cmd_show)
+
     return parser.parse_args()
 
 
@@ -198,17 +208,25 @@ class DownloadedPluginInfo(PluginInfo):
 
 class ShellPluginInfo(PluginInfo):
 
+    SCRIPT_NAME_PATTERN = re.compile('base16-(.*)\.sh$')
+
     def __init__(self):
         super().__init__('shell', Path('.config/base16-shell'))
 
     @property
     def available_themes(self) -> Iterable[str]:
-        pattern = re.compile('base16-(.*)\.sh$')
         for script in (self.path / 'scripts').glob('*.sh'):
-            m = pattern.match(script.name)
+            m = self.SCRIPT_NAME_PATTERN.match(script.name)
             if m is None:
                 continue
             yield m.group(1)
+
+    @property
+    def current_theme(self):
+        m = self.SCRIPT_NAME_PATTERN.match((Path.home() / '.base16_theme').resolve().name)
+        if m is None:
+            return None
+        return m.group(1)
 
     def validate(self) -> bool:
         if not self.path.is_dir():
@@ -345,6 +363,22 @@ def cmd_install(args: argparse.Namespace, config: Config) -> int:
 
         print(f"{plugin} installed successfully")
 
+    return 0
+
+
+def cmd_list(args: argparse.Namespace, config: Config) -> int:
+    for theme in ShellPluginInfo().available_themes:
+        print(theme)
+    return 0
+
+
+def cmd_show(args: argparse.Namespace, config: Config) -> int:
+    theme = ShellPluginInfo().current_theme
+    if theme is None:
+        print('No theme installed currently. Run `base16 doctor` for help.', file=sys.stderr)
+        return 1
+
+    print(theme)
     return 0
 
 
