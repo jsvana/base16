@@ -50,7 +50,7 @@ def parse_args() -> argparse.Namespace:
     theme_arg = argparse.ArgumentParser(add_help=False)
     theme_arg.add_argument("theme", help="Theme to get")
 
-    subparsers = parser.add_subparsers(dest='cmd')
+    subparsers = parser.add_subparsers(dest="cmd")
     subparsers.required = True
 
     doctor_parser = subparsers.add_parser(
@@ -63,25 +63,17 @@ def parse_args() -> argparse.Namespace:
     )
     install_parser.set_defaults(cmd=cmd_install)
 
-    list_parser = subparsers.add_parser(
-        "list", help="List all installed themes"
-    )
+    list_parser = subparsers.add_parser("list", help="List all installed themes")
     list_parser.set_defaults(cmd=cmd_list)
 
-    show_parser = subparsers.add_parser(
-        "show", help="Show currently installed theme"
-    )
+    show_parser = subparsers.add_parser("show", help="Show currently installed theme")
     show_parser.set_defaults(cmd=cmd_show)
 
     return parser.parse_args()
 
 
 class PluginInfo:
-    def __init__(
-        self,
-        name: str,
-        path_in_home: Path,
-    ) -> None:
+    def __init__(self, name: str, path_in_home: Path) -> None:
         self.name = name
         self.path = Path.home() / path_in_home
 
@@ -208,14 +200,14 @@ class DownloadedPluginInfo(PluginInfo):
 
 class ShellPluginInfo(PluginInfo):
 
-    SCRIPT_NAME_PATTERN = re.compile('base16-(.*)\.sh$')
+    SCRIPT_NAME_PATTERN = re.compile("base16-(.*)\.sh$")
 
     def __init__(self):
-        super().__init__('shell', Path('.config/base16-shell'))
+        super().__init__("shell", Path(".config/base16-shell"))
 
     @property
     def available_themes(self) -> Iterable[str]:
-        for script in (self.path / 'scripts').glob('*.sh'):
+        for script in (self.path / "scripts").glob("*.sh"):
             m = self.SCRIPT_NAME_PATTERN.match(script.name)
             if m is None:
                 continue
@@ -223,7 +215,9 @@ class ShellPluginInfo(PluginInfo):
 
     @property
     def current_theme(self):
-        m = self.SCRIPT_NAME_PATTERN.match((Path.home() / '.base16_theme').resolve().name)
+        m = self.SCRIPT_NAME_PATTERN.match(
+            (Path.home() / ".base16_theme").resolve().name
+        )
         if m is None:
             return None
         return m.group(1)
@@ -240,7 +234,7 @@ class ShellPluginInfo(PluginInfo):
             )
             return False
 
-        if 'BASE16_THEME' not in os.environ:
+        if "BASE16_THEME" not in os.environ:
             print(
                 "You don't appear to be using base16_shell. Ensure "
                 "that you've followed the shell setup steps at "
@@ -251,7 +245,7 @@ class ShellPluginInfo(PluginInfo):
             return False
 
         try:
-            os.stat(Path.home() / '.base16_theme')
+            os.stat(Path.home() / ".base16_theme")
         except FileNotFoundError:
             print(
                 "~/.base16_theme currently isn't linked to an installed theme. "
@@ -263,28 +257,28 @@ class ShellPluginInfo(PluginInfo):
         return True
 
     def install(self, theme: str) -> bool:
-        theme_path = self.path / f'scripts/base16-{theme}.sh'
+        theme_path = self.path / f"scripts/base16-{theme}.sh"
         if not theme_path.is_file():
             print(
                 f"{theme_path} isn't a valid theme file. Installed themes: "
-                "{}".format(', '.join(list(self.available_themes))),
+                "{}".format(", ".join(list(self.available_themes))),
                 file=sys.stderr,
             )
             return False
 
-        destination_path = Path.home() / '.base16_theme'
+        destination_path = Path.home() / ".base16_theme"
         if destination_path.is_file() or destination_path.is_symlink():
             destination_path.unlink()
 
         destination_path.symlink_to(theme_path)
 
-        with (Path.home() / '.vimrc_background').open('w') as f:
+        with (Path.home() / ".vimrc_background").open("w") as f:
             lines = [
                 f"if !exists('g:colors_name') || g:colors_name != 'base16-{theme}'\n",
                 f"  colorscheme base16-{theme}\n",
                 "endif\n",
             ]
-            f.write(''.join(lines))
+            f.write("".join(lines))
 
         return True
 
@@ -337,8 +331,11 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         )
         return 1
 
-    if 'shell' not in config.enabled:
-        print(f'Plugin "shell" must be enabled. Please update {args.config_path} accordingly.', file=sys.stderr)
+    if "shell" not in config.enabled:
+        print(
+            f'Plugin "shell" must be enabled. Please update {args.config_path} accordingly.',
+            file=sys.stderr,
+        )
         return 1
 
     for plugin, plugin_info in SUPPORTED_PLUGINS.items():
@@ -375,7 +372,10 @@ def cmd_list(args: argparse.Namespace, config: Config) -> int:
 def cmd_show(args: argparse.Namespace, config: Config) -> int:
     theme = ShellPluginInfo().current_theme
     if theme is None:
-        print('No theme installed currently. Run `base16 doctor` for help.', file=sys.stderr)
+        print(
+            "No theme installed currently. Run `base16 doctor` for help.",
+            file=sys.stderr,
+        )
         return 1
 
     print(theme)
