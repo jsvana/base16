@@ -50,7 +50,7 @@ def parse_args() -> argparse.Namespace:
     theme_arg = argparse.ArgumentParser(add_help=False)
     theme_arg.add_argument("theme", help="Theme to get")
 
-    subparsers = parser.add_subparsers()
+    subparsers = parser.add_subparsers(dest='cmd')
     subparsers.required = True
 
     doctor_parser = subparsers.add_parser(
